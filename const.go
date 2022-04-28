@@ -3,7 +3,7 @@ package session
 import "errors"
 
 const (
-	NAME = "session"
+	NAME = "SESSION"
 )
 
 var (
