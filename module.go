@@ -36,7 +36,8 @@ type (
 		hashring *util.HashRing
 	}
 
-	Config struct {
+	Configs map[string]Config
+	Config  struct {
 		Driver  string
 		Weight  int
 		Prefix  string
@@ -50,51 +51,42 @@ type (
 	}
 )
 
-func (this *Module) Read(id string) (Map, error) {
-	locate := this.hashring.Locate(id)
+// Driver 注册驱动
+func (module *Module) Driver(name string, driver Driver, override bool) {
+	module.mutex.Lock()
+	defer module.mutex.Unlock()
 
-	if inst, ok := this.instances[locate]; ok {
-		key := inst.config.Prefix + id //加前缀
-		return inst.connect.Read(key)
+	if driver == nil {
+		panic("Invalid session driver: " + name)
 	}
 
-	return nil, errInvalidSessionConnection
-
-}
-
-func (this *Module) Write(id string, value Map, expiries ...time.Duration) error {
-	locate := this.hashring.Locate(id)
-
-	if inst, ok := this.instances[locate]; ok {
-		expiry := inst.config.Expiry
-		if len(expiries) > 0 {
-			expiry = expiries[0]
+	if override {
+		module.drivers[name] = driver
+	} else {
+		if module.drivers[name] == nil {
+			module.drivers[name] = driver
 		}
-
-		//KEY加上前缀
-		key := inst.config.Prefix + id
-
-		return inst.connect.Write(key, value, expiry)
 	}
-
-	return errInvalidSessionConnection
 }
 
-func (this *Module) Delete(id string) error {
-	locate := this.hashring.Locate(id)
+func (this *Module) Config(name string, config Config, override bool) {
+	this.mutex.Lock()
+	defer this.mutex.Unlock()
 
-	if inst, ok := this.instances[locate]; ok {
-		key := inst.config.Prefix + id
-		return inst.connect.Delete(key)
+	if name == "" {
+		name = chef.DEFAULT
 	}
 
-	return errInvalidSessionConnection
+	if override {
+		this.configs[name] = config
+	} else {
+		if _, ok := this.configs[name]; ok == false {
+			this.configs[name] = config
+		}
+	}
 }
-
-func (this *Module) Clear() error {
-	for _, inst := range this.instances {
-		inst.connect.Clear(inst.config.Prefix)
+func (this *Module) Configs(config Configs, override bool) {
+	for key, val := range config {
+		this.Config(key, val, override)
 	}
-
-	return errInvalidSessionConnection
 }
